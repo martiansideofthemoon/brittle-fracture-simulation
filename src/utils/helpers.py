@@ -83,7 +83,7 @@ def get_internal(cells, points, beta, stress):
     force = -0.5 * np.einsum('h,hmj,hjl,hik,hkl->hmi', volume, positions, beta, beta, stress)
     forces_node = np.zeros(points.shape)
     np.add.at(forces_node, cells, np.transpose(force, (0, 2, 1)))
-    return force
+    return forces_node
 
 
 def get_mass(cells, points, density):
@@ -91,7 +91,6 @@ def get_mass(cells, points, density):
     volume = get_volume(cells, points)
     volume = np.expand_dims(volume, axis=1)
     mass = np.zeros((points.shape[0],))
-    volume = 0.25 * np.repeat(volume, 4, axis=1)
+    volume = 0.25 * density * np.repeat(volume, 4, axis=1)
     np.add.at(mass, cells, volume)
-    mass = density * volume
     return mass
