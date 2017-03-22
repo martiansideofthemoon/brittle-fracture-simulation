@@ -17,7 +17,7 @@ class VTKInterface(object):
         points = np.zeros((output.GetNumberOfPoints(), 3))
         for i in range(len(points)):
             points[i] = np.array(output.GetPoint(i))
-        cells = np.zeros((output.GetNumberOfCells(), 4))
+        cells = np.zeros((output.GetNumberOfCells(), 4), dtype=int)
         for i in range(len(cells)):
             cells[i][0] = output.GetCell(i).GetPointId(0)
             cells[i][1] = output.GetCell(i).GetPointId(1)
