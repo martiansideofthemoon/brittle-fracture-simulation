@@ -36,14 +36,15 @@ def get_derivatives(cells, positions, velocities, beta):
     v1, v2, v3, v4 = point_vectors(cells, velocities)
     positions = np.stack([p1, p2, p3, p4], axis=2)
     velocities = np.stack([v1, v2, v3, v4], axis=2)
-    delta = np.array([[1, 0, 0],
-                      [0, 1, 0],
-                      [0, 0, 1],
-                      [0, 0, 0]])
-    prod1 = np.matmul(beta, delta)
+    # delta = np.array([[1, 0, 0],
+    #                   [0, 1, 0],
+    #                   [0, 0, 1],
+    #                   [0, 0, 0]])
+    # prod1 = np.matmul(beta, delta)
+    prod1 = beta[:,:,:3]
     # einsum() applies a matrix multiplication across dimension 2 and 3
-    dpos = np.einsum('ijk,ikl->ijl', positions, prod1)
-    dvel = np.einsum('ijk,ikl->ijl', velocities, prod1)
+    dpos = np.einsum('...jk,...kl->...jl', positions, prod1)
+    dvel = np.einsum('...jk,...kl->...jl', velocities, prod1)
     return dpos, dvel
 
 
@@ -53,12 +54,12 @@ def get_stress(dpos, dvel, constants):
 
     constants - (lambda, mu, phi, psi) - equation (7), (8)
     """
-    dpos_T = np.transpose(dpos, [0, 2, 1])
-    dvel_T = np.transpose(dvel, [0, 2, 1])
-    strain = np.einsum('ijk,ikl->ijl', dpos_T, dpos) - np.eye(3)
+    strain = np.einsum('...ij,...ik->...jk', dpos, dpos) - np.eye(3)
+    print np.amax(strain,axis=0)
+    print np.amin(strain,axis=0)
     rate = np.add(
-        np.einsum('ijk,ikl->ijl', dpos_T, dvel),
-        np.einsum('ijk,ikl->ijl', dvel_T, dpos)
+        np.einsum('...ij,...ik->...jk', dpos, dvel),
+        np.einsum('...ij,...ik->...jk', dvel, dpos)
     )
     # Implementation of equation (7)
     str_trace = np.trace(strain, axis1=1, axis2=2)
@@ -72,15 +73,18 @@ def get_stress(dpos, dvel, constants):
     return np.add(elastic, viscous)
 
 
-def get_internal(cells, points, beta, stress):
+def get_internal(cells, points, beta, stress, volume):
     """Compute internal forces on all nodes."""
     p1, p2, p3, p4 = point_vectors(cells, points)
     positions = np.stack([p1, p2, p3, p4], axis=2)
-    volume = get_volume(cells, points)
+    # volume = get_volume(cells, points)
     # This is because the fourth column of beta is not used in summation
     beta = beta[:, :, :3]
     # einsum() implementation of equation (27)
-    force = -0.5 * np.einsum('h,hmj,hjl,hik,hkl->hmi', volume, positions, beta, beta, stress)
+    force = -0.5 * np.einsum('a,ahj,ajl,aik,akl->ahi', volume, positions, beta, beta, stress)
+    # no sum over a: which varies from 0 to len(cells) - 1
+    # h = 0,1,2: for x,y,z
+    # i = 0,1,2,3: one each for the 3 points.
     forces_node = np.zeros(points.shape)
     np.add.at(forces_node, cells, np.transpose(force, (0, 2, 1)))
     return forces_node
