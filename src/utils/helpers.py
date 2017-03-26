@@ -7,8 +7,8 @@ from numpy.linalg import inv
 def get_accel(cells, points, velocities, volume, mass, beta, constants):
     """The function returns the acceleration."""
     dpos, dvel = get_derivatives(cells, points, velocities, beta)
-    stress, elastic, viscous, strain, rate = get_stress(dpos, dvel, constants)
-    internal_f = get_internal(cells, points, beta, stress, volume)
+    stress, tensile = get_stress(dpos, dvel, constants)
+    internal_f, sep_tensor = get_internal(cells, points, beta, stress, tensile, volume)
     internal_acc = internal_f / mass[:, None]
     return internal_acc
     # acceleration = np.add(internal_acc, gravity)
@@ -80,10 +80,14 @@ def get_stress(dpos, dvel, constants):
     viscous = \
         constants[2] * np.einsum('i,jk->ijk', rate_trace, np.eye(3)) + \
         2 * constants[3] * rate
-    return np.add(elastic, viscous), elastic, viscous, strain, rate
+    stress = elastic + viscous
+    e_val, e_vec = np.linalg.eig(stress)
+    e_val_plus = np.maximum(e_val,0)
+    tensile = np.matmul( e_vec * e_val[...,np.newaxis], e_vec.transpose([0,2,1]) )
+    return stress, tensile
 
 
-def get_internal(cells, points, beta, stress, volume):
+def get_internal(cells, points, beta, stress, tensile, volume):
     """Compute internal forces on all nodes."""
     p1, p2, p3, p4 = point_vectors(cells, points)
     positions = np.stack([p1, p2, p3, p4], axis=2)
@@ -91,9 +95,50 @@ def get_internal(cells, points, beta, stress, volume):
     beta = beta[:, :, :3]
     # einsum() implementation of equation (27)
     force = -0.5 * np.einsum('h,hmj,hjl,hik,hkl->hmi', volume, positions, beta, beta, stress)
+    force_tensile = -0.5 * np.einsum('h,hmj,hjl,hik,hkl->hmi', volume, positions, beta, beta, tensile)
+    force_compressive = force - force_tensile
+
     forces_node = np.zeros(points.shape)
+    forces_tensile_node = np.zeros(points.shape)
+
     np.add.at(forces_node, cells, np.transpose(force, (0, 2, 1)))
-    return forces_node
+    np.add.at(forces_tensile_node, cells, np.transpose(force_tensile, (0, 2, 1)))
+    forces_compressive_node = forces_node - forces_tensile_node
+
+    forces_tensile_node = forces_tensile_node[..., np.newaxis]                      # n_pts * 3 * 1
+    forces_compressive_node = forces_compressive_node[..., np.newaxis]
+
+    # print forces_tensile_node.shape
+    # print forces_compressive_node.shape
+
+    # print np.any(np.linalg.norm(forces_tensile_node, axis=1, keepdims=True) == 0)
+    # print np.any(np.linalg.norm(forces_compressive_node, axis=1, keepdims=True) == 0)
+
+    # equation 32
+    t1_denom = np.linalg.norm(forces_tensile_node, axis=1, keepdims=True)
+    t3_denom = np.linalg.norm(forces_compressive_node, axis=1, keepdims=True)
+    t1_denom[t1_denom == 0] = 1
+    t3_denom[t3_denom == 0] = 1
+
+    term1 = np.einsum('ijl,ikl->ijk', forces_tensile_node, forces_tensile_node) / t1_denom      # n_pts * 3 * 3
+    term3 = np.einsum('ijl,ikl->ijk', forces_compressive_node, forces_compressive_node) / t3_denom
+
+    force_tensile = force_tensile.transpose((0, 2, 1))[..., np.newaxis]             # n_cells * 4 * 3 * 1
+    force_compressive = force_compressive.transpose((0, 2, 1))[..., np.newaxis]
+
+    t2_denom = np.linalg.norm(force_tensile, axis=2, keepdims=True)
+    t4_denom = np.linalg.norm(force_compressive, axis=2, keepdims=True)
+    t2_denom[t2_denom == 0] = 1
+    t4_denom[t4_denom == 0] = 1
+
+    t2 = np.einsum('abik,abjk->abij', force_tensile, force_tensile) / t2_denom
+    t4 = np.einsum('abik,abjk->abij', force_compressive, force_compressive) / t4_denom
+
+    sep_tensor = -term1 + term3
+    np.add.at(sep_tensor, cells, t2 - t4)
+    sep_tensor = sep_tensor / 2.
+
+    return forces_node, sep_tensor
 
 
 def get_mass(cells, points, density):

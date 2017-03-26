@@ -9,7 +9,7 @@ constants = [1.04E4, 1.04E4, 0, 6760]
 density = 2588
 h = 0.001 # time_step
 out_time_step = 0.032 # 30 fps
-thres_high = 1
+thres_high = 10
 thres_low = 0.000001
 
 m_points, cells = VTKInterface.read('data/cube.2.vtk')
@@ -19,7 +19,7 @@ positions = np.copy(m_points)
 positions[:, 2] = 1.5 * positions[:, 2]
 beta = get_beta(cells, m_points)
 velocities = np.zeros(m_points.shape)
-gravity = -1 * np.array([0, 0, 0])
+gravity = -0 * np.array([0, 9.8, 0])
 
 def get_acc(points, velocities):
     """The function makes things easier to type."""
@@ -28,7 +28,8 @@ def get_acc(points, velocities):
     global mass
     global beta
     global constants
-    return get_accel(cells, points, velocities, volume, mass, beta, constants)
+    global gravity
+    return get_accel(cells, points, velocities, volume, mass, beta, constants) + gravity
 
 def get_update(positions, velocities):
     global h
@@ -49,22 +50,22 @@ def get_update(positions, velocities):
         pos_update = pos_update + h * (velocities + vel_update + h6 * (acceleration + k1 + k2))
         vel_update = vel_update + h6 * (acceleration + 2 * k1 + 2 * k2 + k3)
         acceleration = get_acc(positions + pos_update, velocities + vel_update)
-        if np.any(np.abs(pos_update) > thres_high) or np.isnan(pos_update).any() or np.isinf(pos_update).any() or \
-           np.any(np.abs(vel_update) > thres_high) or np.isnan(vel_update).any() or np.isinf(vel_update).any():
+        if np.any(np.abs(pos_update) > thres_high) or np.isnan(pos_update).any() or np.isinf(pos_update).any() :#or \
+           # np.any(np.abs(vel_update) > thres_high) or np.isnan(vel_update).any() or np.isinf(vel_update).any():
             return pos_update, vel_update
     return pos_update, vel_update
 
-for i in range(1000):
+for i in range(100):
     pos_update, vel_update = get_update(positions, velocities)
     while ( np.all(np.abs(pos_update) < thres_low) or np.all(np.abs(vel_update) < thres_low) ) and h < out_time_step:
         h = h * 2.
         pos_update, vel_update = get_update(positions, velocities)
         print i, h
 
-    while np.any(np.abs(pos_update) > thres_high) or np.isnan(pos_update).any() or np.isinf(pos_update).any() or \
-          np.any(np.abs(vel_update) > thres_high) or np.isnan(vel_update).any() or np.isinf(vel_update).any():
+    while np.any(np.abs(pos_update) > thres_high) or np.isnan(pos_update).any() or np.isinf(pos_update).any() :#or \
+          # np.any(np.abs(vel_update) > thres_high) or np.isnan(vel_update).any() or np.isinf(vel_update).any():
         print np.any(np.abs(pos_update) > thres_high), np.isnan(pos_update).any(), np.isinf(pos_update).any()
-        print np.any(np.abs(vel_update) > thres_high), np.isnan(vel_update).any(), np.isinf(vel_update).any()
+        # print np.any(np.abs(vel_update) > thres_high), np.isnan(vel_update).any(), np.isinf(vel_update).any()
         h = h / 2.
         pos_update, vel_update = get_update(positions, velocities)
         print i, h
