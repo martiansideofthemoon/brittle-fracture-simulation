@@ -81,9 +81,11 @@ def get_stress(dpos, dvel, constants):
         constants[2] * np.einsum('i,jk->ijk', rate_trace, np.eye(3)) + \
         2 * constants[3] * rate
     stress = elastic + viscous
+
+    # Implementation of force decomposition
     e_val, e_vec = np.linalg.eig(stress)
-    e_val_plus = np.maximum(e_val,0)
-    tensile = np.matmul( e_vec * e_val[...,np.newaxis], e_vec.transpose([0,2,1]) )
+    e_val_plus = np.maximum(e_val, 0)
+    tensile = np.matmul(e_vec * e_val_plus[..., np.newaxis], e_vec.transpose([0, 2, 1]))
     return stress, tensile
 
 

@@ -17,9 +17,11 @@ volume = get_volume(cells, m_points)
 mass = get_mass(cells, m_points, density)
 positions = np.copy(m_points)
 positions[:, 2] = 1.5 * positions[:, 2]
+positions[:, 1] = 1.5 * positions[:, 1]
 beta = get_beta(cells, m_points)
 velocities = np.zeros(m_points.shape)
 gravity = -0 * np.array([0, 9.8, 0])
+
 
 def get_acc(points, velocities):
     """The function makes things easier to type."""
@@ -30,6 +32,7 @@ def get_acc(points, velocities):
     global constants
     global gravity
     return get_accel(cells, points, velocities, volume, mass, beta, constants) + gravity
+
 
 def get_update(positions, velocities):
     global h
@@ -57,7 +60,7 @@ def get_update(positions, velocities):
 
 for i in range(100):
     pos_update, vel_update = get_update(positions, velocities)
-    while ( np.all(np.abs(pos_update) < thres_low) or np.all(np.abs(vel_update) < thres_low) ) and h < out_time_step:
+    while (np.all(np.abs(pos_update) < thres_low) or np.all(np.abs(vel_update) < thres_low) ) and h < out_time_step:
         h = h * 2.
         pos_update, vel_update = get_update(positions, velocities)
         print i, h
@@ -70,9 +73,6 @@ for i in range(100):
         pos_update, vel_update = get_update(positions, velocities)
         print i, h
 
-    # if stress.any() != 0:
-    #     import pdb
-    #     pdb.set_trace()
     print i, h
     positions = positions + pos_update
     velocities = velocities + vel_update
