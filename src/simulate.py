@@ -7,18 +7,20 @@ from utils.vtk_interface import VTKInterface
 # Assuming the object is glass
 constants = [1.04E4, 1.04E4, 0, 6760]
 density = 2588
-h = 0.001 # time_step
-out_time_step = 0.032 # 30 fps
+h = 0.001                   # time_step
+out_time_step = 0.032       # 30 fps
 thres_high = 10
 thres_low = 0.000001
 
-m_points, cells = VTKInterface.read('data/cube.3.vtk')
+m_points, cells = VTKInterface.read('data/cube.1.vtk')
+
+m_points = m_points * 2 - 1
 volume = get_volume(cells, m_points)
 mass = get_mass(cells, m_points, density)
 positions = np.copy(m_points)
-positions = 1.5 * positions
-# positions[:, 2] = 1.5 * positions[:, 2]
-# positions[:, 1] = 1.5 * positions[:, 1]
+positions[:, 1], positions[:, 2] = positions[:, 1] * np.sin(positions[:, 0]) + positions[:, 2] * np.cos(positions[:, 0]),\
+    - positions[:, 1] * np.cos(positions[:, 0]) + positions[:, 2] * np.sin(positions[:, 0])
+
 beta = get_beta(cells, m_points)
 velocities = np.zeros(m_points.shape)
 gravity = -0 * np.array([0, 9.8, 0])
