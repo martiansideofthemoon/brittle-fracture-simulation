@@ -12,12 +12,13 @@ out_time_step = 0.032 # 30 fps
 thres_high = 10
 thres_low = 0.000001
 
-m_points, cells = VTKInterface.read('data/cube.2.vtk')
+m_points, cells = VTKInterface.read('data/cube.3.vtk')
 volume = get_volume(cells, m_points)
 mass = get_mass(cells, m_points, density)
 positions = np.copy(m_points)
-positions[:, 2] = 1.5 * positions[:, 2]
-positions[:, 1] = 1.5 * positions[:, 1]
+positions = 1.5 * positions
+# positions[:, 2] = 1.5 * positions[:, 2]
+# positions[:, 1] = 1.5 * positions[:, 1]
 beta = get_beta(cells, m_points)
 velocities = np.zeros(m_points.shape)
 gravity = -0 * np.array([0, 9.8, 0])
