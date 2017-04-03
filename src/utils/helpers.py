@@ -9,8 +9,8 @@ def get_accel(cells, points, velocities, volume, mass, beta, constants):
     dpos, dvel = get_derivatives(cells, points, velocities, beta)
     stress, tensile = get_stress(dpos, dvel, constants)
     internal_f, sep_tensor = get_internal(cells, points, beta, stress, tensile, volume)
-    internal_acc = internal_f / mass[:, None]
-    return internal_acc
+    internal_acc = internal_f / mass[:, None] # + np.array([0, -9.8, 0])
+    return internal_acc, sep_tensor
     # acceleration = np.add(internal_acc, gravity)
 
 
