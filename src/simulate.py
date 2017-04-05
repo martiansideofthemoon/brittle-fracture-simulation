@@ -109,12 +109,17 @@ class Body(object):
                 self.cells[cell] = np.array([point, p0, p1, self.cells[cell, neg[0]]])
                 cell1 = np.array([new_point, p0, self.cells[cell, plus[0]], self.cells[cell, plus[1]]])
                 cell2 = np.array([new_point, p0, p1, self.cells[cell, plus[1]]])
-                
+
             elif len(plus) == 1 and len(neg) == 2:
-                p1 = helpers.intersect(point, normal, points[plus[0]], points[neg[0]])
+                p0 = helpers.intersect(point, normal, points[plus[0]], points[neg[0]])
+                p0 = self.add_pt(p0, cell)
+                p1 = helpers.intersect(point, normal, points[plus[0]], points[neg[1]])
                 p1 = self.add_pt(p1, cell)
-                p2 = helpers.intersect(point, normal, points[plus[0]], points[neg[1]])
-                p2 = self.add_pt(p2, cell)
+                # Fetched the intersection point indices
+                # Time to remesh system
+                self.cells[cell] = np.array([new_point, p0, p1, self.cells[cell, plus[0]]])
+                cell1 = np.array([point, p0, self.cells[cell, neg[0]], self.cells[cell, neg[1]]])
+                cell2 = np.array([point, p0, p1, self.cells[cell, neg[1]]])
             else:
                 print "Error!"
                 sys.exit()
