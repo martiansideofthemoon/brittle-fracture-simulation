@@ -1,5 +1,6 @@
 """This file creates a basic FEM simulation."""
 import numpy as np
+import sys
 import utils.helpers as helpers
 import utils.deformations as deformations
 
@@ -41,6 +42,32 @@ class Body(object):
         # Return index of newly added point
         return (self.m_points.shape[0] - 1)
 
+    def add_pt(self, position, cell):
+        """Helper function to add a point using barycentric coordinates."""
+        positions = np.transpose(self.positions[self.cells[cell]])
+        ones = np.ones((1, positions.shape[1]))
+        orig = np.linalg.inv(np.concatenate([positions, ones], axis=0))
+        bary = orig.dot(np.concatenate([position, np.array([1])]))
+        m_points = np.transpose(self.m_points[self.cells[cell]])
+        m_point = np.concatenate([m_points, ones], axis=0).dot(bary)[:3]
+        velocities = np.transpose(self.velocities[self.cells[cell]])
+        velocity = np.concatenate([velocities, ones], axis=0).dot(bary)[:3]
+        # Adding the point to the mesh
+        self.m_points = \
+            np.concatenate((self.m_points, m_point), axis=0)
+        self.positions = \
+            np.concatenate((self.positions, position), axis=0)
+        self.velocities = \
+            np.concatenate((self.velocities, velocity), axis=0)
+        # Return index of newly added point
+        return (self.m_points.shape[0] - 1)
+
+    def recompute(self):
+        """Recompute mesh parameters."""
+        self.beta = helpers.get_beta(self.cells, self.m_points)
+        self.volume = helpers.get_volume(self.cells, self.m_points)
+        self.mass = helpers.get_mass(self.cells, self.m_points, self.density)
+
     def fracture(self, fracture_point):
         """Break the object and perform local remeshing."""
         point = fracture_point['point']
@@ -54,20 +81,45 @@ class Body(object):
             points = self.positions[self.cells[cell]]
             vectors = points - self.positions[point]
             dots = np.einsum('ij,j->i', vectors, normal)
-            print str(np.amin(dots)) + ", " + str(np.amax(dots))
+            # TODO - Add thresholding for nodes close to plain
             if np.amin(dots) >= 0:
-                # Assign the cell to `new_point`
+                # Assign the cell to `new_point`. Assumed to be n+
                 self.cells[cell][point_index[i]] = new_point
             elif np.amax(dots) <= 0:
-                # Keep it assigned to `point`
+                # Keep it assigned to `point`. Assumed to be n-
                 pass
             else:
                 cross_cells.append(cell)
                 cross_point_indices.append(point_index[i])
         # Work on splitting up the tetrahedrons crossing an element
-        for cell in enumerate(cross_cells):
+        for i, cell in enumerate(cross_cells):
             # Each cell needs to be broken into 3 tetrahedra
-            pass
+            points = self.positions[self.cells[cell]]
+            vectors = points - self.positions[point]
+            dots = np.einsum('ij,j->i', vectors, normal)
+            plus = np.where(dots > 0)[0]
+            neg = np.where(dots < 0)[0]
+            if len(plus) == 2 and len(neg) == 1:
+                p0 = helpers.intersect(point, normal, points[plus[0]], points[neg[0]])
+                p0 = self.add_pt(p0, cell)
+                p1 = helpers.intersect(point, normal, points[plus[1]], points[neg[0]])
+                p1 = self.add_pt(p1, cell)
+                # Fetched the intersection point indices
+                # Time to remesh system
+                self.cells[cell] = np.array([point, p0, p1, self.cells[cell, neg[0]]])
+                cell1 = np.array([new_point, p0, self.cells[cell, plus[0]], self.cells[cell, plus[1]]])
+                cell2 = np.array([new_point, p0, p1, self.cells[cell, plus[1]]])
+                
+            elif len(plus) == 1 and len(neg) == 2:
+                p1 = helpers.intersect(point, normal, points[plus[0]], points[neg[0]])
+                p1 = self.add_pt(p1, cell)
+                p2 = helpers.intersect(point, normal, points[plus[0]], points[neg[1]])
+                p2 = self.add_pt(p2, cell)
+            else:
+                print "Error!"
+                sys.exit()
+        self.recompute()
+
 
 class Simulate(object):
     """This class runs the RK4 simulation on an object."""

@@ -4,6 +4,15 @@ import numpy as np
 from numpy.linalg import inv
 
 
+def intersect(plane_point, plane_vec, pt1, pt2):
+    """The function intersects a line and a plane."""
+    ray_dir = pt2 - pt1
+    ndotu = plane_vec.dot(ray_dir)
+    w = pt1 - plane_point
+    si = -plane_vec.dot(w) / ndotu
+    return (pt1 + si * ray_dir)
+
+
 def get_accel(cells, points, velocities, volume, mass, beta, constants):
     """The function returns the acceleration."""
     dpos, dvel = get_derivatives(cells, points, velocities, beta)
