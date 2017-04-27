@@ -129,7 +129,7 @@ class Body(object):
 class Simulate(object):
     """This class runs the RK4 simulation on an object."""
 
-    def __init__(self, constants, sim_step, fps, body, namespace):
+    def __init__(self, constants, sim_step, fps, body, namespace, rule):
         """The standard initialization function."""
         self.lame = constants['lame']
         self.density = constants['density']
@@ -140,6 +140,7 @@ class Simulate(object):
         self.thres_low = constants['thresholds']['low']
         self.body = body
         self.namespace = namespace
+        self.rule = rule
 
     def get_acc(self, pos, vel):
         """Wrapper for helper function get_accel()."""
@@ -154,6 +155,35 @@ class Simulate(object):
         )
 
     def get_update(self):
+        """Integrate object's trajectory using Explicit Euler."""
+        positions = self.body.positions
+        velocities = self.body.velocities
+        h = self.h
+        out_rate = self.out_rate
+        pos_update = np.zeros(positions.shape)
+        vel_update = np.zeros(velocities.shape)
+        sep_tensor = None
+        acceleration, _ = self.get_acc(positions, velocities)
+        for j in range(int(out_rate / h)):
+            pos_update = pos_update + \
+                h * (velocities)
+            vel_update = vel_update + \
+                h * (acceleration)
+            # Acceleration for next timestep
+            acceleration, sep_tensor = self.get_acc(
+                pos=(positions + pos_update),
+                vel=(velocities + vel_update)
+            )
+            if np.any(np.abs(pos_update) > self.thres_high) or \
+               np.isnan(pos_update).any() or \
+               np.isinf(pos_update).any():
+                # np.any(np.abs(vel_update) > thres_high) or \
+                # np.isnan(vel_update).any() or \
+                # np.isinf(vel_update).any():
+                return pos_update, vel_update, sep_tensor
+        return pos_update, vel_update, sep_tensor
+
+    def get_update_rk4(self):
         """Integrate object's trajectory using RK4."""
         positions = self.body.positions
         velocities = self.body.velocities
@@ -201,6 +231,10 @@ class Simulate(object):
 
     def run(self, num_frames):
         """The number of frames to render in the scene."""
+        if self.rule == "rk4":
+            get_update = self.get_update_rk4
+        else:
+            get_update = self.get_update
         thres_high = self.thres_high
         thres_low = self.thres_low
         out_rate = self.out_rate
@@ -209,12 +243,12 @@ class Simulate(object):
             # First trying to speed up simulation
             breaking = True
             while breaking is True:
-                pos_update, vel_update, sep_tensor = self.get_update()
+                pos_update, vel_update, sep_tensor = get_update()
                 while (np.all(np.abs(pos_update) < thres_low) or
                        np.all(np.abs(vel_update) < thres_low)) and \
                         self.h < (out_rate / 2.0):
                     self.h = self.h * 2.
-                    pos_update, vel_update, sep_tensor = self.get_update()
+                    pos_update, vel_update, sep_tensor = get_update()
                     print i, self.h
                 # Now slowing down simulation to get reasonable results
                 while np.any(np.abs(pos_update) > thres_high) or \
@@ -227,7 +261,7 @@ class Simulate(object):
                         np.isnan(pos_update).any(), \
                         np.isinf(pos_update).any()
                     self.h = self.h / 2.
-                    pos_update, vel_update, sep_tensor = self.get_update()
+                    pos_update, vel_update, sep_tensor = get_update()
                     print i, self.h
                 # Check whether object can separate at a point
                 breaking, fracture_point = self.check_separation(sep_tensor)
@@ -274,5 +308,9 @@ constants = {
 
 body = Body('data/cube.2.vtk', constants['density'])
 body.deform(deformations.twist)
-sim = Simulate(constants, 0.001, 30, body, 'squashcube')
+sim = Simulate(constants=constants,
+               sim_step=0.001,
+               fps=30,
+               body=body,
+               namespace='squashcube')
 sim.run(100)
