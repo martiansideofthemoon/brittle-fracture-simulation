@@ -5,6 +5,7 @@ import utils.helpers as helpers
 import utils.deformations as deformations
 
 from utils.vtk_interface import VTKInterface
+from utils.povray_interface import POVRayInterface
 
 
 class Body(object):
@@ -292,6 +293,11 @@ class Simulate(object):
             self.body.cells,
             'output/' + self.namespace + str(frame) + ".vtk"
         )
+        POVRayInterface.write(
+            self.body.positions,
+            self.body.cells,
+            'output/' + self.namespace + str(frame) + ".pov"
+        )
 
 
 # Assuming the object is glass
@@ -306,6 +312,7 @@ constants = {
 }
 
 body = Body('data/cube.2.vtk', constants['density'])
+
 # body.deform(deformations.twist)
 sim = Simulate(constants=constants,
                sim_step=0.001,
