@@ -318,13 +318,13 @@ constants = {
 
 body = Body('data/cube.2.vtk', constants['density'])
 
-#body.deform(deformations.stretch)
+# body.deform(deformations.stretch)
 
 sim = Simulate(constants=constants,
                sim_step=0.001,
                fps=30,
                body=body,
-               namespace='cube_pull.vtk',
+               namespace='cube_pull',
                rule='rk4',
-               ext=external.stretch)
+               ext=external.gravity_ground)
 sim.run(100)
