@@ -7,4 +7,4 @@ Additionally, to convert STL files to compatible VTK files, you need to use [Tet
 
 ## Running The Code
 
-To run the translate script, run `src/translate.py`. This will create 100 frames in the `output` directory. To view this in Paraview, run `./paraview --data=sphere..vtk`. Press the *Play* button to run the simulation.
+To run the simulation script, run `src/simulate.py`. This will create 100 frames in the `output` directory. To view this in Paraview, run `./paraview --data=cube..vtk`. Press the *Play* button to run the simulation.

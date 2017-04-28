@@ -3,6 +3,7 @@ import numpy as np
 import sys
 import utils.helpers as helpers
 import utils.deformations as deformations
+import utils.external as external
 
 from utils.vtk_interface import VTKInterface
 from utils.povray_interface import POVRayInterface
@@ -76,7 +77,7 @@ class Body(object):
         self.mass = helpers.get_mass(self.cells, self.m_points, self.density)
 
     def split(self, point, normal):
-        """Splits a point by separating tetrahedra at that location."""
+        """Split a point by separating tetrahedra at that location."""
         new_point = self.clone_point(point)
         connected_cells, point_index = np.where(self.cells == point)
         dot_prods = {}
@@ -127,7 +128,7 @@ class Body(object):
 class Simulate(object):
     """This class runs the RK4 simulation on an object."""
 
-    def __init__(self, constants, sim_step, fps, body, namespace, rule):
+    def __init__(self, constants, sim_step, fps, body, namespace, rule, ext):
         """The standard initialization function."""
         self.lame = constants['lame']
         self.density = constants['density']
@@ -139,10 +140,11 @@ class Simulate(object):
         self.body = body
         self.namespace = namespace
         self.rule = rule
+        self.external_acc = ext
 
     def get_acc(self, pos, vel):
         """Wrapper for helper function get_accel()."""
-        return helpers.get_accel(
+        internal, sep_tensor = helpers.get_accel(
             cells=self.body.cells,
             points=pos,
             velocities=vel,
@@ -151,6 +153,9 @@ class Simulate(object):
             beta=self.body.beta,
             constants=self.lame
         )
+        external = self.external_acc(self.body)
+        total = internal + external
+        return total, sep_tensor
 
     def get_update(self):
         """Integrate object's trajectory using Explicit Euler."""
@@ -304,7 +309,7 @@ class Simulate(object):
 constants = {
     'lame': [1.04E4, 1.04E4, 0, 6760],
     'density': 2588,
-    'toughness': 125,
+    'toughness': 40,
     'thresholds': {
         'high': 10,
         'low': 0.000001
@@ -313,11 +318,13 @@ constants = {
 
 body = Body('data/cube.2.vtk', constants['density'])
 
-# body.deform(deformations.twist)
+#body.deform(deformations.stretch)
+
 sim = Simulate(constants=constants,
                sim_step=0.001,
                fps=30,
                body=body,
-               namespace='squashcube',
-               rule='rk4')
-sim.run(200)
+               namespace='cube_pull.vtk',
+               rule='rk4',
+               ext=external.stretch)
+sim.run(100)
