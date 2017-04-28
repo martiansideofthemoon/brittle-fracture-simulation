@@ -1,6 +1,6 @@
 ## CS775 - Brittle Fracture Simulation
 
-A submission by Kalpesh Krishna (140070017) and Siddhant Ranade (130260002).
+A submission by Kalpesh Krishna (140070017) and Siddhant Ranade (130260002). Video on [https://www.youtube.com/watch?v=jU9Lr6nmxv4](https://www.youtube.com/watch?v=jU9Lr6nmxv4).
 
 ## Requirements
 
