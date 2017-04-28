@@ -42,6 +42,12 @@ class Body(object):
         # Return index of newly added point
         return (self.m_points.shape[0] - 1)
 
+    def delete_last(self):
+        """Helper function for fracture() routine."""
+        self.m_points = self.m_points[:-1]
+        self.positions = self.positions[:-1]
+        self.velocities = self.velocities[:-1]
+
     def add_pt(self, position, cell):
         """Helper function to add a point using barycentric coordinates."""
         positions = np.transpose(self.positions[self.cells[cell]])
@@ -54,11 +60,11 @@ class Body(object):
         velocity = np.concatenate([velocities, ones], axis=0).dot(bary)[:3]
         # Adding the point to the mesh
         self.m_points = \
-            np.concatenate((self.m_points, m_point), axis=0)
+            np.concatenate((self.m_points, np.array([m_point])), axis=0)
         self.positions = \
-            np.concatenate((self.positions, position), axis=0)
+            np.concatenate((self.positions, np.array([position])), axis=0)
         self.velocities = \
-            np.concatenate((self.velocities, velocity), axis=0)
+            np.concatenate((self.velocities, np.array([velocity])), axis=0)
         # Return index of newly added point
         return (self.m_points.shape[0] - 1)
 
@@ -68,61 +74,52 @@ class Body(object):
         self.volume = helpers.get_volume(self.cells, self.m_points)
         self.mass = helpers.get_mass(self.cells, self.m_points, self.density)
 
+    def split(self, point, normal):
+        """Splits a point by separating tetrahedra at that location."""
+        new_point = self.clone_point(point)
+        connected_cells, point_index = np.where(self.cells == point)
+        dot_prods = {}
+        new_indices = []
+        old_indices = []
+        for i, cell in enumerate(connected_cells):
+            points = self.positions[self.cells[cell]]
+            vectors = points - self.positions[point]
+            mags = np.sqrt(np.sum(np.square(vectors), axis=1))
+            mags = np.maximum(mags, 0.00001)
+            dots = np.einsum('ij,j->i', vectors, normal) / mags
+            for j in range(0, 4):
+                dot_prods[self.cells[cell, j]] = dots[j]
+            # 0.1 is cos(90 - 0.1*180/pi)
+            if np.amin(dots) >= -0.1:
+                # Assign the cell to `new_point`. Assumed to be n+
+                new_indices.append([cell, point_index[i]])
+            elif np.amax(dots) <= 0.1:
+                old_indices.append([cell, point_index[i]])
+                # Keep it assigned to `point`. Assumed to be n-
+                pass
+            else:
+                old_indices.append([cell, point_index[i]])
+                pass
+        # Remove point if nothing assigned to it
+        if len(new_indices) == 0 or len(old_indices) == 0:
+            self.delete_last()
+        else:
+            for pair in new_indices:
+                self.cells[pair[0]][pair[1]] = new_point
+        return connected_cells, point_index, dot_prods
+
     def fracture(self, fracture_point):
         """Break the object and perform local remeshing."""
         point = fracture_point['point']
         normal = fracture_point['vector']
+        print self.m_points[point]
         # Cloning the fracture point
-        new_point = self.clone_point(point)
-        connected_cells, point_index = np.where(self.cells == point)
-        cross_cells = []
-        cross_point_indices = []
-        for i, cell in enumerate(connected_cells):
-            points = self.positions[self.cells[cell]]
-            vectors = points - self.positions[point]
-            dots = np.einsum('ij,j->i', vectors, normal)
-            # TODO - Add thresholding for nodes close to plain
-            if np.amin(dots) >= 0:
-                # Assign the cell to `new_point`. Assumed to be n+
-                self.cells[cell][point_index[i]] = new_point
-            elif np.amax(dots) <= 0:
-                # Keep it assigned to `point`. Assumed to be n-
-                pass
-            else:
-                cross_cells.append(cell)
-                cross_point_indices.append(point_index[i])
-        # Work on splitting up the tetrahedrons crossing an element
-        for i, cell in enumerate(cross_cells):
-            # Each cell needs to be broken into 3 tetrahedra
-            points = self.positions[self.cells[cell]]
-            vectors = points - self.positions[point]
-            dots = np.einsum('ij,j->i', vectors, normal)
-            plus = np.where(dots > 0)[0]
-            neg = np.where(dots < 0)[0]
-            if len(plus) == 2 and len(neg) == 1:
-                p0 = helpers.intersect(point, normal, points[plus[0]], points[neg[0]])
-                p0 = self.add_pt(p0, cell)
-                p1 = helpers.intersect(point, normal, points[plus[1]], points[neg[0]])
-                p1 = self.add_pt(p1, cell)
-                # Fetched the intersection point indices
-                # Time to remesh system
-                self.cells[cell] = np.array([point, p0, p1, self.cells[cell, neg[0]]])
-                cell1 = np.array([new_point, p0, self.cells[cell, plus[0]], self.cells[cell, plus[1]]])
-                cell2 = np.array([new_point, p0, p1, self.cells[cell, plus[1]]])
-
-            elif len(plus) == 1 and len(neg) == 2:
-                p0 = helpers.intersect(point, normal, points[plus[0]], points[neg[0]])
-                p0 = self.add_pt(p0, cell)
-                p1 = helpers.intersect(point, normal, points[plus[0]], points[neg[1]])
-                p1 = self.add_pt(p1, cell)
-                # Fetched the intersection point indices
-                # Time to remesh system
-                self.cells[cell] = np.array([new_point, p0, p1, self.cells[cell, plus[0]]])
-                cell1 = np.array([point, p0, self.cells[cell, neg[0]], self.cells[cell, neg[1]]])
-                cell2 = np.array([point, p0, p1, self.cells[cell, neg[1]]])
-            else:
-                print "Error!"
-                sys.exit()
+        connected_cells, point_index, dot_prods = self.split(point, normal)
+        closest = sorted(dot_prods, key=lambda x: abs(dot_prods[x]))
+        closest = closest[1:]
+        for c in closest[1:]:
+            if abs(dot_prods[c]) < 0.1:
+                _, _, _ = self.split(c, normal)
         self.recompute()
 
 
@@ -241,34 +238,36 @@ class Simulate(object):
         sep_tensor = None
         for i in range(num_frames):
             # First trying to speed up simulation
-            breaking = True
-            while breaking is True:
+            pos_update, vel_update, sep_tensor = get_update()
+            # while (np.all(np.abs(pos_update) < thres_low) or
+            #        np.all(np.abs(vel_update) < thres_low)) and \
+            #         self.h < (out_rate / 2.0):
+            #     self.h = self.h * 2.
+            #     pos_update, vel_update, sep_tensor = get_update()
+            #     print i, self.h
+            # Now slowing down simulation to get reasonable results
+            while np.any(np.abs(pos_update) > thres_high) or \
+                    np.isnan(pos_update).any() or \
+                    np.isinf(pos_update).any():
+                # np.any(np.abs(vel_update) > thres_high) or \
+                # np.isnan(vel_update).any() or \
+                # np.isinf(vel_update).any():
+                print np.any(np.abs(pos_update) > thres_high), \
+                    np.isnan(pos_update).any(), \
+                    np.isinf(pos_update).any()
+                self.h = self.h / 2.
                 pos_update, vel_update, sep_tensor = get_update()
-                while (np.all(np.abs(pos_update) < thres_low) or
-                       np.all(np.abs(vel_update) < thres_low)) and \
-                        self.h < (out_rate / 2.0):
-                    self.h = self.h * 2.
-                    pos_update, vel_update, sep_tensor = get_update()
-                    print i, self.h
-                # Now slowing down simulation to get reasonable results
-                while np.any(np.abs(pos_update) > thres_high) or \
-                        np.isnan(pos_update).any() or \
-                        np.isinf(pos_update).any():
-                    # np.any(np.abs(vel_update) > thres_high) or \
-                    # np.isnan(vel_update).any() or \
-                    # np.isinf(vel_update).any():
-                    print np.any(np.abs(pos_update) > thres_high), \
-                        np.isnan(pos_update).any(), \
-                        np.isinf(pos_update).any()
-                    self.h = self.h / 2.
-                    pos_update, vel_update, sep_tensor = get_update()
-                    print i, self.h
-                # Check whether object can separate at a point
-                breaking, fracture_point = self.check_separation(sep_tensor)
-                if breaking is True:
-                    self.body.fracture(fracture_point)
+                print i, self.h
             print i, self.h
             self.body.update(pos_update, vel_update)
+
+            # Check whether object can separate at a point
+            # breaking = True
+            # while breaking is True:
+            breaking, fracture_point = self.check_separation(sep_tensor)
+            if breaking is True:
+                print "Fractured!"
+                self.body.fracture(fracture_point)
             self.write(i)
 
     def check_separation(self, sep_tensor):
@@ -299,7 +298,7 @@ class Simulate(object):
 constants = {
     'lame': [1.04E4, 1.04E4, 0, 6760],
     'density': 2588,
-    'toughness': 200,
+    'toughness': 125,
     'thresholds': {
         'high': 10,
         'low': 0.000001
@@ -307,10 +306,11 @@ constants = {
 }
 
 body = Body('data/cube.2.vtk', constants['density'])
-body.deform(deformations.twist)
+# body.deform(deformations.twist)
 sim = Simulate(constants=constants,
                sim_step=0.001,
                fps=30,
                body=body,
-               namespace='squashcube')
-sim.run(100)
+               namespace='squashcube',
+               rule='rk4')
+sim.run(200)
