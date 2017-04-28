@@ -16,4 +16,4 @@ To run the simulation script, run `src/simulate.py`. This will create 100 frames
 
 In the `simulate.py` file, certain parameters can be changed to produce a different output. Using a `body.deform()` function, one can stretch / twist / squash an object. The list of available macros are present in `src/utils/deformations.py`. The `constants` dictionary can be edited to account for other objects and materials.
 
-`namespace` denotes the output file names. `rule` denotes the integrationg scheme, can be Runge-Kutta4 or Explicit Euler. Finally `ext` points to a set of external forces defined in `src/utils/external.py`.
+`namespace` denotes the output file names. `rule` denotes the integration scheme, can be Runge-Kutta4 or Explicit Euler. Finally `ext` points to a set of external forces defined in `src/utils/external.py`.
